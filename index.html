@@ -1,0 +1,309 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title></title>
+
+    <link type="text/css" rel="stylesheet" href="Css/ChatStyle.css" />
+    <link rel="stylesheet" href="/Css/JQueryUI/themes/base/jquery.ui.all.css">
+
+    <script src="/Scripts/jquery-1.8.2.min.js"></script>
+
+    <script src="/Scripts/ui/jquery.ui.core.js"></script>
+    <script src="/Scripts/ui/jquery.ui.widget.js"></script>
+    <script src="/Scripts/ui/jquery.ui.mouse.js"></script>
+    <script src="/Scripts/ui/jquery.ui.resizable.js"></script>
+
+    <script src="/Scripts/jquery.signalR-1.0.0.js"></script>
+    
+    
+    <script src="/signalr/hubs"></script>
+    
+    <script type="text/javascript">
+
+ //https://www.codeproject.com/Articles/562023/Asp-Net-SignalR-Chat-Room internet sitesinden yararlanılmıştır.
+
+
+        $(function () {
+
+            setScreen(false);
+
+            // chatHub bağlama 
+            var chatHub = $.connection.chatHub;
+
+            registerClientMethods(chatHub);
+
+            // Hub başlatma
+            $.connection.hub.start().done(function () {
+
+                registerEvents(chatHub)
+
+            });
+
+        });
+        //Ekranı gösterme
+        function setScreen(isLogin) {
+
+            if (!isLogin) {
+
+                $("#divChat").hide();
+                $("#divLogin").show();
+            }
+            else {
+
+                $("#divChat").show();
+                $("#divLogin").hide();
+            }
+
+        }
+        //Eylemleri kaydetme
+        function registerEvents(chatHub) {
+
+            $("#btnStartChat").click(function () {
+
+                var name = $("#txtNickName").val();
+                if (name.length > 0) {
+                    chatHub.server.connect(name);
+                }
+                else {
+                    alert("Please enter name");
+                }
+
+            });
+
+
+        }
+
+
+        function registerClientMethods(chatHub) {
+
+            // Clientları bağlama
+            chatHub.client.onConnected = function (id, userName, allUsers, messages) {
+
+                setScreen(true);
+                 
+                $('#hdId').val(id);
+                $('#hdUserName').val(userName);
+                $('#spanUser').html(userName);
+
+                // Tüm clientları ekleme
+                for (i = 0; i < allUsers.length; i++) {
+
+                    AddUser(chatHub, allUsers[i].ConnectionId, allUsers[i].UserName);
+                }
+
+                // Mevcut mesajları ekleme
+                for (i = 0; i < messages.length; i++) {
+
+                    AddMessage(messages[i].UserName, messages[i].Message);
+                }
+
+
+            }
+
+            // Yeni client bağlama
+            chatHub.client.onNewUserConnected = function (id, name) {
+
+                AddUser(chatHub, id, name);
+            }
+
+            
+
+                
+            
+            // Client bağlantısını kesme
+
+                chatHub.client.onUserDisconnected = function (id, userName) {
+                    
+                    $('#' + id).remove();
+
+                    var ctrId = 'private_' + id;
+                    $('#' + ctrId).remove();
+
+
+                   
+                    var disc = $('<a id="' + id + '" class="user" >' + userName + '(Offline)' + '<a>');
+
+                    $(disc).hide();
+                    $('#divusers').prepend(disc);
+                    $(disc).fadeIn(200);
+                    
+            }
+
+
+            
+            //Mesajları alma
+            chatHub.client.messageReceived = function (userName, message) {
+
+                AddMessage(userName, message);
+            }
+
+
+            //kişisel mesaj gönderme
+            chatHub.client.sendPrivateMessage = function (windowId, fromUserName, message) {
+                
+                
+                    var ctrId = 'private_' + windowId;
+
+
+                if ($('#' + ctrId).length == 0) {
+                    if (confirm(fromUserName + ' kişisiyle konuşma başlatmak istiyor musunuz?')) {
+                            createPrivateChatWindow(chatHub, windowId, ctrId, fromUserName);
+                        } else {
+                            // Do nothing!
+                        }
+                        
+
+                    }
+
+                    $('#' + ctrId).find('#divMessage').append('<div class="message"><span class="userName">' + fromUserName + '</span>: ' + message + '</div>');
+
+                    
+                    var height = $('#' + ctrId).find('#divMessage')[0].scrollHeight;
+                    $('#' + ctrId).find('#divMessage').scrollTop(height);
+
+            }
+
+        }
+        //Kullanıcı ekleme
+        function AddUser(chatHub, id, name) {
+
+
+            var userId = $('#hdId').val();
+           
+            var code = "";
+
+            if (userId == id) {
+
+                code = $('<div class="loginUser">' + name + '(Online)' + "</div>");
+                
+
+            }
+            else {
+
+                code = $('<a id="' + id + '" class="user" >' + name + '(Online)' +'<a>');
+                
+                $(code).dblclick(function () {
+
+                        var id = $(this).attr('id');
+
+                        if (userId != id)
+                            OpenPrivateChatWindow(chatHub, id, name);
+
+                });
+            }
+
+            $("#divusers").append(code);
+            
+        }
+        //Mesaj ekleme
+        function AddMessage(userName, message) {
+            $('#divChatWindow').append('<div class="message"><span class="userName">' + userName + '</span>: ' + message + '</div>');
+
+            var height = $('#divChatWindow')[0].scrollHeight;
+            $('#divChatWindow').scrollTop(height);
+        }
+        //Kişisel mesaj penceresi gösterme
+        function OpenPrivateChatWindow(chatHub, id, userName) {
+             
+                var ctrId = 'private_' + id;
+
+                if ($('#' + ctrId).length > 0) return;
+
+                createPrivateChatWindow(chatHub, id, ctrId, userName);
+            
+
+
+        }
+        //Kişisel mesaj penceresi oluşturma
+        function createPrivateChatWindow(chatHub, userId, ctrId, userName) {
+            
+
+            var div = '<div id="' + ctrId + '" class="draggable" rel="0">' +
+                       '<div class="header">' +
+                           
+
+                           '<span class="selText" rel="0">' + userName + '</span>' +
+                       '</div>' +
+                       '<div id="divMessage" class="messageArea">' +
+
+                       '</div>' +
+                       '<div class="buttonBar">' +
+                          '<input id="txtPrivateMessage" class="msgText" type="text"   />' +
+                '<input id="btnSendMessage" class="submitButton button" type="button" value="Gönder"   />' +
+                '<input id="btnExitMessage" class="submitButton button" type="button" value="Çıkış"   />'+
+                       '</div>' +
+                    '</div>';
+
+            var $div = $(div);
+            //Pencereyi kapatma
+            $div.find('#btnExitMessage').click(function () {
+                $('#' + ctrId).remove();
+            });
+
+            // Mesaj gönderme
+            $div.find("#btnSendMessage").click(function () {
+
+                $textBox = $div.find("#txtPrivateMessage");
+                var msg = $textBox.val();
+                if (msg.length > 0) {
+
+                    chatHub.server.sendPrivateMessage(userId, msg);
+                    $textBox.val('');
+                }
+            });
+
+            // Enter ile mesaj gönderme
+            $div.find("#txtPrivateMessage").keypress(function (e) {
+                if (e.which == 13) {
+                    $div.find("#btnSendMessage").click();
+                }
+            });
+
+            AddDivToContainer($div);
+
+        }
+
+        function AddDivToContainer($div) {
+            $('#divContainer').prepend($div);
+
+            $div.draggable({
+
+                handle: ".header",
+                stop: function () {
+
+                }
+            });
+        }
+
+    </script>
+    
+</head>
+<body>
+
+
+    <div id="divContainer">
+        <div id="divLogin" class="login">
+            <div>
+                Nick Name:<br />
+            <input id="txtNickName" type="text" class="textBox" />
+            </div>
+            <div id="divButton">
+                <input id="btnStartChat" type="button" class="submitButton" value="BAĞLAN" />
+            </div>
+        </div>
+
+        <div id="divChat" class="chatRoom">
+            
+            <div class="content">
+
+                <div id="divusers" class="users">
+                </div>
+            </div>
+        </div>
+
+        <input id="hdId" type="hidden" />
+        <input id="hdUserName" type="hidden" />
+    </div>
+
+</body>
+</html>
